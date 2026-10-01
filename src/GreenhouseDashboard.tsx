@@ -350,7 +350,7 @@ export default function GreenhouseDashboard() {
   }
 
   return (
-    <div className="h-screen bg-[#F8FAF9] font-sans overflow-hidden flex flex-col">
+    <div className="h-screen bg-[#F8FAF9] font-sans overflow-hidden flex flex-col min-w-[1440px] overflow-x-auto">
       {/* Header */}
       <header className="bg-white border-b border-[#E5EFE8] h-[50px] flex items-center shrink-0">
         <div className="w-full max-w-[1920px] mx-auto px-3 flex items-center justify-between">
@@ -398,7 +398,7 @@ export default function GreenhouseDashboard() {
       </header>
 
       {/* Main Content */}
-      <div className="w-full max-w-[1920px] mx-auto px-4 py-3 flex-1 min-h-0">
+      <div className="w-full max-w-[1920px] mx-auto px-4 py-3 flex-1 min-h-0 min-h-[600px]">
         <div className="grid grid-cols-12 gap-3 h-full">
           {/* Left Sidebar - Crop Selection */}
           <div className="col-span-2 flex flex-col min-h-0">
@@ -451,7 +451,7 @@ export default function GreenhouseDashboard() {
           {/* Center - Sensors & Chart */}
           <div className="col-span-8 flex flex-col gap-3 min-h-0">
             {/* Sensor Cards */}
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-5 gap-2 shrink-0">
               {sensorData.map((sensor) => {
                 const status = getAlertStatus(sensor.id)
                 return (
@@ -660,7 +660,7 @@ export default function GreenhouseDashboard() {
             </div>
 
             {/* Threshold Settings */}
-            <div className="bg-white rounded-2xl p-4 pb-5 shadow-sm border border-[#E5EFE8] flex-1 flex flex-col min-h-0">
+            <div className="bg-white rounded-2xl p-4 pb-5 shadow-sm border border-[#E5EFE8] flex-1 flex flex-col min-h-0 shrink-0">
               <h2 className="text-xs font-semibold text-gray-800 mb-3 flex items-center gap-2 uppercase tracking-wider shrink-0">
                 <Settings size={14} />
                 Thresholds
