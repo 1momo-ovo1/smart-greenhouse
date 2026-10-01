@@ -177,13 +177,13 @@ export default function GreenhouseDashboard() {
   // 选择作物
   const handleSelectCrop = (crop: Crop) => {
     setSelectedCrop(crop)
-    setThresholds((prev) => ({
+    setThresholds({
       ...crop.thresholds,
       // 作物档案中的光照阈值单位是 lux，滑杆使用 klx，这里统一为 klx
       lightMin: crop.thresholds.lightMin > 30 ? crop.thresholds.lightMin / 1000 : crop.thresholds.lightMin,
-      // waterTarget 属于 ExtendedThresholdConfig，作物档案里没有，保留当前值
-      waterTarget: prev.waterTarget,
-    }))
+      // 补上作物档案里没有的 waterTarget
+      waterTarget: WATER_DISTANCE_THRESHOLD,
+    })
   }
 
   // 切换执行器
@@ -561,13 +561,10 @@ export default function GreenhouseDashboard() {
                       }}
                       labelStyle={{ color: '#6b7280', fontSize: 12 }}
                       itemStyle={{ color: '#10b981', fontSize: 14, fontWeight: 600 }}
-                      labelFormatter={(label) => {
-                        const timestamp = Number(label)
-                        return Number.isNaN(timestamp) ? String(label) : new Date(timestamp).toLocaleString()
-                      }}
-                      formatter={(value, name) => [
+                      labelFormatter={(value) => new Date(value as string | number).toLocaleString()}
+                      formatter={(value: any) => [
                         `${Number(value ?? 0).toFixed(1)}${getYAxisUnit(activeChart)}`,
-                        String(name ?? sensorData.find((s) => s.id === activeChart)?.name ?? ''),
+                        sensorData.find((s) => s.id === activeChart)?.name ?? activeChart,
                       ]}
                     />
                     {getThresholdLine(activeChart) && (
