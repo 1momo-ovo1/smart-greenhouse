@@ -1,0 +1,8 @@
+# Cloudflare Pages 配置
+# 使用 wrangler CLI 部署时（npx wrangler pages deploy），wrangler 会自动读取本文件：
+#   - name: 解决 "Missing Pages project name" 报错，无需再写 --project-name
+#   - pages_build_output_dir: 不传路径时默认部署这个目录，可直接 npx wrangler pages deploy
+#   - compatibility_date: 官方标记为必填，缺失时 wrangler 只警告并回落到默认值
+name = "smart-greenhouse"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-09-30"

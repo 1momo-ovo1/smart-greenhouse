@@ -401,13 +401,13 @@ export default function GreenhouseDashboard() {
       <div className="w-full max-w-[1920px] mx-auto px-4 py-3 flex-1 min-h-0">
         <div className="grid grid-cols-12 gap-3 h-full">
           {/* Left Sidebar - Crop Selection */}
-          <div className="col-span-2 flex flex-col">
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#E5EFE8] flex-1 flex flex-col">
-              <h2 className="text-xs font-semibold text-gray-800 mb-3 flex items-center gap-2 uppercase tracking-wider">
+          <div className="col-span-2 flex flex-col min-h-0">
+            <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#E5EFE8] flex-1 flex flex-col min-h-0">
+              <h2 className="text-xs font-semibold text-gray-800 mb-3 flex items-center gap-2 uppercase tracking-wider shrink-0">
                 <Leaf size={14} />
                 Select Crop
               </h2>
-              <div className="space-y-2 flex-1 overflow-y-auto">
+              <div className="space-y-2 flex-1 min-h-0 overflow-y-auto">
                 {crops.map((crop) => (
                   <button
                     key={crop.id}
@@ -449,7 +449,7 @@ export default function GreenhouseDashboard() {
           </div>
 
           {/* Center - Sensors & Chart */}
-          <div className="col-span-8 flex flex-col gap-3">
+          <div className="col-span-8 flex flex-col gap-3 min-h-0">
             {/* Sensor Cards */}
             <div className="grid grid-cols-5 gap-2">
               {sensorData.map((sensor) => {
@@ -490,7 +490,7 @@ export default function GreenhouseDashboard() {
             </div>
 
             {/* Chart Section */}
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#E5EFE8] flex-1 flex flex-col">
+            <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#E5EFE8] flex-1 flex flex-col min-h-0">
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-xs font-semibold text-gray-800 flex items-center gap-2 uppercase tracking-wider">
                   <TrendingUp size={14} />
@@ -523,7 +523,7 @@ export default function GreenhouseDashboard() {
               </div>
 
               {/* Recharts Chart */}
-              <div className="h-[420px] w-full">
+              <div className="h-[300px] w-full shrink-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={historyData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
                     <defs>
@@ -601,29 +601,29 @@ export default function GreenhouseDashboard() {
               </div>
 
               {/* Quick Stats */}
-              <div className="flex items-center justify-center gap-3 mt-2 pt-2 border-t border-gray-100">
-                <div className="bg-gray-50 rounded-xl px-4 py-2 text-center min-w-[90px]">
-                  <div className="text-base font-bold text-emerald-600">
+              <div className="flex items-center justify-center gap-2 mt-1 pt-1 border-t border-gray-100">
+                <div className="bg-gray-50 rounded-lg px-3 py-1 text-center min-w-[70px]">
+                  <div className="text-sm font-bold text-emerald-600">
                     {actuators.filter((a) => a.status).length}
                   </div>
-                  <div className="text-xs text-gray-400">Active Actuators</div>
+                  <div className="text-[10px] text-gray-400">Active Actuators</div>
                 </div>
-                <div className="bg-gray-50 rounded-xl px-4 py-2 text-center min-w-[90px]">
-                  <div className="text-base font-bold text-emerald-600">
+                <div className="bg-gray-50 rounded-lg px-3 py-1 text-center min-w-[70px]">
+                  <div className="text-sm font-bold text-emerald-600">
                     {sensorData.filter((s) => getAlertStatus(s.id) === 'normal').length}/{sensorData.length}
                   </div>
-                  <div className="text-xs text-gray-400">Sensors Normal</div>
+                  <div className="text-[10px] text-gray-400">Sensors Normal</div>
                 </div>
-                <div className="bg-gray-50 rounded-xl px-4 py-2 text-center min-w-[90px]">
-                  <div className="text-base font-bold text-emerald-600 truncate">{selectedCrop.name}</div>
-                  <div className="text-xs text-gray-400">Current Crop</div>
+                <div className="bg-gray-50 rounded-lg px-3 py-1 text-center min-w-[70px]">
+                  <div className="text-sm font-bold text-emerald-600 truncate">{selectedCrop.name}</div>
+                  <div className="text-[10px] text-gray-400">Current Crop</div>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Right Sidebar - Actuators & Thresholds */}
-          <div className="col-span-2 flex flex-col gap-3">
+          <div className="col-span-2 flex flex-col gap-3 min-h-0">
             {/* Actuators */}
             <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#E5EFE8]">
               <h2 className="text-xs font-semibold text-gray-800 mb-3 flex items-center gap-2 uppercase tracking-wider">
@@ -660,12 +660,12 @@ export default function GreenhouseDashboard() {
             </div>
 
             {/* Threshold Settings */}
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#E5EFE8] flex-1">
-              <h2 className="text-xs font-semibold text-gray-800 mb-3 flex items-center gap-2 uppercase tracking-wider">
+            <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#E5EFE8] flex-1 flex flex-col min-h-0">
+              <h2 className="text-xs font-semibold text-gray-800 mb-3 flex items-center gap-2 uppercase tracking-wider shrink-0">
                 <Settings size={14} />
                 Thresholds
               </h2>
-              <div className="space-y-2">
+              <div className="space-y-1 flex-1 min-h-0 overflow-y-auto">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs text-gray-500">Air Temp Max</label>
@@ -757,7 +757,7 @@ export default function GreenhouseDashboard() {
       </div>
 
       {/* Alert Log Panel */}
-      <div className="w-full max-w-[1920px] mx-auto px-4 pb-3 shrink-0">
+      <div className="w-full max-w-[1920px] mx-auto px-4 h-[100px] shrink-0">
         <AlertLogPanel ref={logPanelRef} />
       </div>
 

@@ -152,9 +152,9 @@ const AlertLogPanel = forwardRef<AlertLogPanelRef>((_, ref) => {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-[#E5EFE8] p-4">
+    <div className="bg-white rounded-xl border border-[#E5EFE8] p-3 h-full flex flex-col min-h-0">
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-2 shrink-0">
         <h2 className="text-xs font-semibold text-gray-800 flex items-center gap-2 uppercase tracking-wider">
           <Bell size={14} />
           Alert Log
@@ -174,7 +174,7 @@ const AlertLogPanel = forwardRef<AlertLogPanelRef>((_, ref) => {
       {/* Log List */}
       <div
         ref={scrollRef}
-        className="h-[80px] overflow-y-auto space-y-1 pr-1 scrollbar-thin"
+        className="flex-1 min-h-0 overflow-y-auto space-y-1 pr-1 scrollbar-thin"
       >
         {logs.map((log) => (
           <div key={log.id} className="flex items-center gap-2 text-sm">
