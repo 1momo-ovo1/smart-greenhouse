@@ -60,7 +60,7 @@ export async function onRequestGet(context) {
   }
 
   // 查询所有数据流
-  const datastreamIds = url.searchParams.get('datastream_id') || 'temp,hum,light,soil_humi,water,temp_target,hum_target,soil_target,light_target'
+  const datastreamIds = url.searchParams.get('datastream_id') || 'temp,hum,light'
 
   const oneNetUrl = `${ONENET_BASE_URL}/devices/${deviceId}/datapoints?datastream_id=${datastreamIds}`
 

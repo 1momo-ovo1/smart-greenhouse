@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AlertLogPanel, { type AlertLogPanelRef } from './AlertLogPanel'
 import {
@@ -70,15 +70,22 @@ interface ExtendedThresholdConfig extends ThresholdConfig {
   waterTarget: number
 }
 
-// 生成初始传感器数据
+// 接口返回的 id -> 前端传感器字段名
+const API_FIELD_MAP: Record<string, string> = {
+  air_temp: 'air_temperature',
+  air_humidity: 'air_humidity',
+  light_intensity: 'light_intensity',
+}
+
+// 生成初始传感器数据（等待首次拉取，值均为 null）
 function generateInitialSensorData(): SensorData[] {
   const now = Date.now()
   return [
-    { id: 'air_temperature', name: 'Air Temperature', value: 25.6, unit: '°C', timestamp: now, icon: 'thermometer' },
-    { id: 'air_humidity', name: 'Air Humidity', value: 60.2, unit: '%', timestamp: now, icon: 'droplets' },
-    { id: 'soil_moisture', name: 'Soil Moisture', value: 52.8, unit: '%', timestamp: now, icon: 'sprout' },
-    { id: 'light_intensity', name: 'Light Intensity', value: 12.5, unit: 'klx', timestamp: now, icon: 'sun' },
-    { id: 'water_level', name: 'Water Level', value: 15.3, unit: 'cm', timestamp: now, icon: 'waves' },
+    { id: 'air_temperature', name: 'Air Temperature', value: null, unit: '°C', timestamp: now, icon: 'thermometer' },
+    { id: 'air_humidity', name: 'Air Humidity', value: null, unit: '%', timestamp: now, icon: 'droplets' },
+    { id: 'soil_moisture', name: 'Soil Moisture', value: null, unit: '%', timestamp: now, icon: 'sprout' },
+    { id: 'light_intensity', name: 'Light Intensity', value: null, unit: 'klx', timestamp: now, icon: 'sun' },
+    { id: 'water_level', name: 'Water Level', value: null, unit: 'cm', timestamp: now, icon: 'waves' },
   ]
 }
 
@@ -116,6 +123,38 @@ export default function GreenhouseDashboard() {
   const [showToast, setShowToast] = useState(false)
   const logPanelRef = useRef<AlertLogPanelRef>(null)
 
+  // 拉取真实传感器数据；失败时保留上次数据，仅记录一条警告日志
+  const fetchData = useCallback(async () => {
+    try {
+      const res = await fetch('/api/sensors')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const json = await res.json()
+      const list: { id?: unknown; value?: unknown }[] = Array.isArray(json?.data) ? json.data : []
+
+      const values = new Map<string, number>()
+      for (const item of list) {
+        const field = API_FIELD_MAP[String(item?.id)]
+        if (!field) continue
+        const raw = Number(item?.value)
+        if (!Number.isFinite(raw)) continue
+        // 光照强度 lux -> klx
+        values.set(field, field === 'light_intensity' ? raw / 1000 : raw)
+      }
+
+      setSensorData((prev) =>
+        prev.map((sensor) => {
+          if (!values.has(sensor.id)) return { ...sensor, value: null }
+          return { ...sensor, value: values.get(sensor.id) ?? null, timestamp: Date.now() }
+        })
+      )
+    } catch {
+      // 保留上次数据，不清空
+      const now = new Date()
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
+      logPanelRef.current?.addLog(timeStr, 'warning', '网络异常')
+    }
+  }, [])
+
   // 组件挂载 3 秒后自动添加一条"系统启动"日志
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -126,39 +165,14 @@ export default function GreenhouseDashboard() {
     return () => clearTimeout(timer)
   }, [])
 
-  // 每 3 秒更新本地传感器数据（纯 Mock，无网络请求）
+  // 挂载时拉取一次，之后每 5 秒轮询一次
   useEffect(() => {
+    fetchData()
     const interval = setInterval(() => {
-      setSensorData((prev) =>
-        prev.map((sensor) => {
-          let fluctuation = (Math.random() - 0.5) * 2
-          let newValue = sensor.value + fluctuation
-
-          // 根据传感器类型限制范围
-          switch (sensor.id) {
-            case 'air_temperature':
-              newValue = Math.max(15, Math.min(40, newValue))
-              break
-            case 'air_humidity':
-              newValue = Math.max(30, Math.min(95, newValue))
-              break
-            case 'soil_moisture':
-              newValue = Math.max(20, Math.min(90, newValue))
-              break
-            case 'light_intensity':
-              newValue = Math.max(0, Math.min(30, newValue))
-              break
-            case 'water_level':
-              newValue = Math.max(5, Math.min(50, newValue))
-              break
-          }
-
-          return { ...sensor, value: newValue, timestamp: Date.now() }
-        })
-      )
-    }, 3000)
+      fetchData()
+    }, 5000)
     return () => clearInterval(interval)
-  }, [])
+  }, [fetchData])
 
   // 添加自定义作物
   const handleAddCrop = () => {
@@ -208,17 +222,18 @@ export default function GreenhouseDashboard() {
   // 检查传感器是否超出阈值
   const getAlertStatus = (sensorId: string): 'normal' | 'warning' | 'danger' => {
     const sensor = sensorData.find((s) => s.id === sensorId)
-    if (!sensor) return 'normal'
+    if (!sensor || sensor.value === null) return 'normal'
+    const value = sensor.value
 
     switch (sensorId) {
       case 'air_temperature':
-        return sensor.value > thresholds.airTempMax ? 'danger' : sensor.value > thresholds.airTempMax - 3 ? 'warning' : 'normal'
+        return value > thresholds.airTempMax ? 'danger' : value > thresholds.airTempMax - 3 ? 'warning' : 'normal'
       case 'air_humidity':
-        return sensor.value < thresholds.airHumidityMin ? 'danger' : sensor.value < thresholds.airHumidityMin + 5 ? 'warning' : 'normal'
+        return value < thresholds.airHumidityMin ? 'danger' : value < thresholds.airHumidityMin + 5 ? 'warning' : 'normal'
       case 'soil_moisture':
-        return sensor.value < thresholds.soilMoistureMin ? 'danger' : sensor.value < thresholds.soilMoistureMin + 5 ? 'warning' : 'normal'
+        return value < thresholds.soilMoistureMin ? 'danger' : value < thresholds.soilMoistureMin + 5 ? 'warning' : 'normal'
       case 'light_intensity':
-        return sensor.value < thresholds.lightMin ? 'danger' : sensor.value < thresholds.lightMin + 1000 ? 'warning' : 'normal'
+        return value < thresholds.lightMin ? 'danger' : value < thresholds.lightMin + 1000 ? 'warning' : 'normal'
       default:
         return 'normal'
     }
@@ -476,13 +491,27 @@ export default function GreenhouseDashboard() {
                       {sensor.name}
                     </div>
                     <div className="flex items-baseline gap-1">
-                      <span className={`text-3xl font-bold ${status === 'danger' ? 'text-red-600' : 'text-emerald-600'}`}>
-                        {sensor.value.toFixed(1)}
+                      <span
+                        className={`text-3xl font-bold ${
+                          sensor.value === null
+                            ? 'text-gray-400'
+                            : status === 'danger'
+                              ? 'text-red-600'
+                              : 'text-emerald-600'
+                        }`}
+                      >
+                        {sensor.value === null ? '--' : sensor.value.toFixed(1)}
                       </span>
                       <span className="text-xs text-gray-400">{sensor.unit}</span>
                     </div>
                     <div className="text-xs text-gray-400 mt-1">
-                      {status === 'normal' ? 'Normal' : status === 'warning' ? 'Warning' : 'Alert'}
+                      {sensor.value === null
+                        ? 'Waiting'
+                        : status === 'normal'
+                          ? 'Normal'
+                          : status === 'warning'
+                            ? 'Warning'
+                            : 'Alert'}
                     </div>
                   </div>
                 )

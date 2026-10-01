@@ -20,7 +20,7 @@ export const DATA_STREAMS = {
 export interface SensorData {
   id: string
   name: string
-  value: number
+  value: number | null
   unit: string
   timestamp: number
   icon: string
