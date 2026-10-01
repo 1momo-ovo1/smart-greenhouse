@@ -523,7 +523,7 @@ export default function GreenhouseDashboard() {
               </div>
 
               {/* Recharts Chart */}
-              <div className="h-[300px] w-full shrink-0">
+              <div className="flex-1 w-full min-h-[400px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={historyData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
                     <defs>
@@ -602,19 +602,19 @@ export default function GreenhouseDashboard() {
 
               {/* Quick Stats */}
               <div className="flex items-center justify-center gap-2 mt-1 pt-1 border-t border-gray-100">
-                <div className="bg-gray-50 rounded-lg px-3 py-1 text-center min-w-[70px]">
+                <div className="bg-gray-50 rounded-lg px-3 py-1.5 text-center min-w-[70px]">
                   <div className="text-sm font-bold text-emerald-600">
                     {actuators.filter((a) => a.status).length}
                   </div>
                   <div className="text-[10px] text-gray-400">Active Actuators</div>
                 </div>
-                <div className="bg-gray-50 rounded-lg px-3 py-1 text-center min-w-[70px]">
+                <div className="bg-gray-50 rounded-lg px-3 py-1.5 text-center min-w-[70px]">
                   <div className="text-sm font-bold text-emerald-600">
                     {sensorData.filter((s) => getAlertStatus(s.id) === 'normal').length}/{sensorData.length}
                   </div>
                   <div className="text-[10px] text-gray-400">Sensors Normal</div>
                 </div>
-                <div className="bg-gray-50 rounded-lg px-3 py-1 text-center min-w-[70px]">
+                <div className="bg-gray-50 rounded-lg px-3 py-1.5 text-center min-w-[70px]">
                   <div className="text-sm font-bold text-emerald-600 truncate">{selectedCrop.name}</div>
                   <div className="text-[10px] text-gray-400">Current Crop</div>
                 </div>
