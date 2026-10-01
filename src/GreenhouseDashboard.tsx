@@ -129,18 +129,16 @@ export default function GreenhouseDashboard() {
       const res = await fetch('/api/sensors')
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
-      const list: { id?: unknown; value?: unknown }[] = Array.isArray(json?.data) ? json.data : []
-
+      const payload = json?.data
+      if (!payload || typeof payload !== 'object') return
       const values = new Map<string, number>()
-      for (const item of list) {
-        const field = API_FIELD_MAP[String(item?.id)]
+      for (const [identifier, rawValue] of Object.entries(payload as Record<string, unknown>)) {
+        const field = API_FIELD_MAP[identifier]
         if (!field) continue
-        const raw = Number(item?.value)
+        const raw = Number(rawValue)
         if (!Number.isFinite(raw)) continue
-        // 光照强度 lux -> klx
-        values.set(field, field === 'light_intensity' ? raw / 1000 : raw)
+        values.set(field, raw)
       }
-
       setSensorData((prev) =>
         prev.map((sensor) => {
           if (!values.has(sensor.id)) return { ...sensor, value: null }
@@ -151,7 +149,7 @@ export default function GreenhouseDashboard() {
       // 保留上次数据，不清空
       const now = new Date()
       const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
-      logPanelRef.current?.addLog(timeStr, 'warning', '网络异常')
+      logPanelRef.current?.addLog(timeStr, 'warning', '网络异常，使用上次数据')
     }
   }, [])
 
