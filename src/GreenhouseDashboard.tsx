@@ -352,8 +352,8 @@ export default function GreenhouseDashboard() {
   return (
     <div className="h-screen bg-[#F8FAF9] font-sans overflow-hidden flex flex-col">
       {/* Header */}
-      <header className="bg-white border-b border-[#E5EFE8] h-[60px] flex items-center shrink-0">
-        <div className="w-full max-w-[1920px] mx-auto px-4 flex items-center justify-between">
+      <header className="bg-white border-b border-[#E5EFE8] h-[50px] flex items-center shrink-0">
+        <div className="w-full max-w-[1920px] mx-auto px-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
               onClick={() => navigate('/')}
@@ -361,8 +361,8 @@ export default function GreenhouseDashboard() {
             >
               <ArrowLeft size={18} />
             </button>
-            <h1 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-              <Leaf size={20} className="text-emerald-500" />
+            <h1 className="text-base font-semibold text-gray-800 flex items-center gap-2">
+              <Leaf size={18} className="text-emerald-500" />
               Smart Greenhouse
             </h1>
           </div>
@@ -660,7 +660,7 @@ export default function GreenhouseDashboard() {
             </div>
 
             {/* Threshold Settings */}
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#E5EFE8] flex-1 flex flex-col min-h-0">
+            <div className="bg-white rounded-2xl p-4 pb-5 shadow-sm border border-[#E5EFE8] flex-1 flex flex-col min-h-0">
               <h2 className="text-xs font-semibold text-gray-800 mb-3 flex items-center gap-2 uppercase tracking-wider shrink-0">
                 <Settings size={14} />
                 Thresholds
@@ -757,7 +757,7 @@ export default function GreenhouseDashboard() {
       </div>
 
       {/* Alert Log Panel */}
-      <div className="w-full max-w-[1920px] mx-auto px-4 h-[100px] shrink-0">
+      <div className="w-full max-w-[1920px] mx-auto px-4 h-[110px] shrink-0 mb-1">
         <AlertLogPanel ref={logPanelRef} />
       </div>
 
