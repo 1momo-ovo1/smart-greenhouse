@@ -29,6 +29,53 @@ function jsonResponse(status, payload) {
   })
 }
 
+/**
+ * 生成 OneNET 安全鉴权 Token（HMAC-SHA1）
+ * authorization = version=2022-05-01&res=products/{productId}&et={过期时间戳}&method=sha1&sign={签名}
+ * StringForSignature = et + "\n" + method + "\n" + res + "\n" + version
+ */
+async function generateToken(productId, accessKey) {
+  const version = '2022-05-01'
+  const method = 'sha1'
+  const res = `products/${productId}`
+  // 1 小时有效期
+  const et = Math.floor(Date.now() / 1000) + 3600
+
+  const stringForSignature = `${et}\n${method}\n${res}\n${version}`
+
+  // accessKey 是 base64 编码的密钥，先解码成二进制字节
+  const binaryKey = atob(accessKey)
+  const keyBytes = new Uint8Array(binaryKey.length)
+  for (let i = 0; i < binaryKey.length; i++) {
+    keyBytes[i] = binaryKey.charCodeAt(i)
+  }
+
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    keyBytes.buffer,
+    { name: 'HMAC', hash: 'SHA-1' },
+    false,
+    ['sign']
+  )
+
+  const signature = await crypto.subtle.sign(
+    'HMAC',
+    cryptoKey,
+    new TextEncoder().encode(stringForSignature)
+  )
+
+  // 签名结果 base64 编码
+  const sign = btoa(String.fromCharCode(...new Uint8Array(signature)))
+
+  return (
+    `version=${version}` +
+    `&res=${encodeURIComponent(res)}` +
+    `&et=${et}` +
+    `&method=${method}` +
+    `&sign=${encodeURIComponent(sign)}`
+  )
+}
+
 export async function onRequestPost(context) {
   const { request, env } = context
 
@@ -56,10 +103,12 @@ export async function onRequestPost(context) {
       return jsonResponse(400, { success: false, error: 'Missing "datastream" in request body' })
     }
 
+    const authorization = await generateToken(productId, accessKey)
+
     const response = await fetch(`${ONENET_API_BASE}/thingmodel/set-device-property`, {
       method: 'POST',
       headers: {
-        authorization: accessKey,
+        authorization,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
