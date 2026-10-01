@@ -3,7 +3,7 @@
  * OneNET Studio（新版）API 代理：查询设备最新数据点
  *
  * 平台：OneNET Studio（open.iot.10086.cn）
- * 接口：GET https://iot-api.heclouds.com/datapoint/latest
+ * 接口：GET https://iot-api.heclouds.com/thingmodel/query-device-property
  * 鉴权：请求头 authorization: {accessKey}（新版，非旧版 api-key）
  *
  * 环境变量（本地开发写在 .dev.vars）：
@@ -21,11 +21,6 @@ const IDENTIFIER_MAPPING = {
   light: 'light_intensity',
 }
 
-// 需要除以的单位换算系数（光照 lux -> klx）
-const UNIT_DIVISOR = {
-  light_intensity: 1000,
-}
-
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*',
@@ -40,8 +35,9 @@ function jsonResponse(status, payload) {
 }
 
 /**
- * 兼容新版 API 的两种 data 结构：
- * 1) 数组：[{ identifier: 'temp', value: 25.4, time: '...' }, ...]
+ * 兼容新版 API 的 data 结构：
+ * 1) 数组（实际返回）：[{ identifier: 'temp', value: '25.2', time: 1790878355191, data_type: 'float' }, ...]
+ *    注意 value 为字符串，且部分属性（如 fan_switch）没有 value 字段
  * 2) 对象：{ temp: 25.4, hum: 60.2 } 或 { temp: { value: 25.4, time: '...' } }
  */
 function normalizeDatapoints(data) {
@@ -69,7 +65,7 @@ function normalizeDatapoints(data) {
   return items
 }
 
-// 按映射关系组装前端需要的数据，并做单位换算
+// 按映射关系组装前端需要的数据（不做单位换算）
 function buildSensorData(items) {
   const result = {}
 
@@ -77,10 +73,14 @@ function buildSensorData(items) {
     const field = IDENTIFIER_MAPPING[item.identifier]
     if (!field) continue
 
+    // 跳过没有 value 字段的属性（设备从未上报）
+    if (item.value === undefined || item.value === null || item.value === '') continue
+
+    // value 是字符串，统一转成数字
     const raw = Number(item.value)
     if (!Number.isFinite(raw)) continue
 
-    result[field] = raw / (UNIT_DIVISOR[field] || 1)
+    result[field] = raw
   }
 
   return result
@@ -99,7 +99,7 @@ export async function onRequestGet(context) {
     }
 
     const url =
-      `${ONENET_API_BASE}/datapoint/latest` +
+      `${ONENET_API_BASE}/thingmodel/query-device-property` +
       `?product_id=${encodeURIComponent(productId)}` +
       `&device_name=${encodeURIComponent(deviceName)}`
 
