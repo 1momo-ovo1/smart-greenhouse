@@ -177,7 +177,13 @@ export default function GreenhouseDashboard() {
   // 选择作物
   const handleSelectCrop = (crop: Crop) => {
     setSelectedCrop(crop)
-    setThresholds(crop.thresholds)
+    setThresholds((prev) => ({
+      ...crop.thresholds,
+      // 作物档案中的光照阈值单位是 lux，滑杆使用 klx，这里统一为 klx
+      lightMin: crop.thresholds.lightMin > 30 ? crop.thresholds.lightMin / 1000 : crop.thresholds.lightMin,
+      // waterTarget 属于 ExtendedThresholdConfig，作物档案里没有，保留当前值
+      waterTarget: prev.waterTarget,
+    }))
   }
 
   // 切换执行器
@@ -189,7 +195,7 @@ export default function GreenhouseDashboard() {
   }
 
   // 更新阈值
-  const updateThreshold = (key: keyof ThresholdConfig, value: number) => {
+  const updateThreshold = (key: keyof ExtendedThresholdConfig, value: number) => {
     setThresholds((prev) => ({ ...prev, [key]: value }))
   }
 
@@ -555,8 +561,14 @@ export default function GreenhouseDashboard() {
                       }}
                       labelStyle={{ color: '#6b7280', fontSize: 12 }}
                       itemStyle={{ color: '#10b981', fontSize: 14, fontWeight: 600 }}
-                      labelFormatter={(value) => new Date(value).toLocaleString()}
-                      formatter={(value: number) => [`${value.toFixed(1)}${getYAxisUnit(activeChart)}`, sensorData.find((s) => s.id === activeChart)?.name]}
+                      labelFormatter={(label) => {
+                        const timestamp = Number(label)
+                        return Number.isNaN(timestamp) ? String(label) : new Date(timestamp).toLocaleString()
+                      }}
+                      formatter={(value, name) => [
+                        `${Number(value ?? 0).toFixed(1)}${getYAxisUnit(activeChart)}`,
+                        String(name ?? sensorData.find((s) => s.id === activeChart)?.name ?? ''),
+                      ]}
                     />
                     {getThresholdLine(activeChart) && (
                       <ReferenceLine
@@ -666,6 +678,7 @@ export default function GreenhouseDashboard() {
                     type="range"
                     min="0"
                     max="100"
+                    step="1"
                     value={thresholds.airTempMax}
                     onChange={(e) => updateThreshold('airTempMax', Number(e.target.value))}
                     className="w-full h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer accent-emerald-500"
@@ -680,6 +693,7 @@ export default function GreenhouseDashboard() {
                     type="range"
                     min="0"
                     max="100"
+                    step="1"
                     value={thresholds.airHumidityMin}
                     onChange={(e) => updateThreshold('airHumidityMin', Number(e.target.value))}
                     className="w-full h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer accent-emerald-500"
@@ -694,6 +708,7 @@ export default function GreenhouseDashboard() {
                     type="range"
                     min="0"
                     max="100"
+                    step="1"
                     value={thresholds.soilMoistureMin}
                     onChange={(e) => updateThreshold('soilMoistureMin', Number(e.target.value))}
                     className="w-full h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer accent-emerald-500"
@@ -723,6 +738,7 @@ export default function GreenhouseDashboard() {
                     type="range"
                     min="0"
                     max="50"
+                    step="1"
                     value={thresholds.waterTarget}
                     onChange={(e) => updateThreshold('waterTarget', Number(e.target.value))}
                     className="w-full h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer accent-emerald-500"
