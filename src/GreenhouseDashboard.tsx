@@ -50,6 +50,9 @@ const SENSOR_ICONS: Record<string, React.ReactNode> = {
 // 水位距离阈值（cm）：距离越大代表水位越低，超过此值表示缺水
 const WATER_DISTANCE_THRESHOLD = 20
 
+// 光照满量程（lux）：作物档案的 lux 阈值据此换算成 0-100%
+const LIGHT_LUX_FULL_SCALE = 15000
+
 const INITIAL_ACTUATORS: ActuatorState[] = [
   { id: 'buzzer', name: 'Buzzer', status: false, icon: 'bell' },
   { id: 'humidifier', name: 'Humidifier', status: false, icon: 'droplets' },
@@ -84,7 +87,7 @@ function generateInitialSensorData(): SensorData[] {
     { id: 'air_temperature', name: 'Air Temperature', value: null, unit: '°C', timestamp: now, icon: 'thermometer' },
     { id: 'air_humidity', name: 'Air Humidity', value: null, unit: '%', timestamp: now, icon: 'droplets' },
     { id: 'soil_moisture', name: 'Soil Moisture', value: null, unit: '%', timestamp: now, icon: 'sprout' },
-    { id: 'light_intensity', name: 'Light Intensity', value: null, unit: 'klx', timestamp: now, icon: 'sun' },
+    { id: 'light_intensity', name: 'Light Intensity', value: null, unit: '%', timestamp: now, icon: 'sun' },
     { id: 'water_level', name: 'Water Level', value: null, unit: 'cm', timestamp: now, icon: 'waves' },
   ]
 }
@@ -114,7 +117,7 @@ export default function GreenhouseDashboard() {
   const [actuators, setActuators] = useState<ActuatorState[]>(INITIAL_ACTUATORS)
   const [thresholds, setThresholds] = useState<ExtendedThresholdConfig>({
     ...VEGETABLE_PROFILES[0].thresholds,
-    lightMin: 12,
+    lightMin: 40,
     waterTarget: WATER_DISTANCE_THRESHOLD,
   })
   const [historyData, setHistoryData] = useState<{ timestamp: number; value: number }[]>(generateInitialHistoryData)
@@ -191,8 +194,9 @@ export default function GreenhouseDashboard() {
     setSelectedCrop(crop)
     setThresholds({
       ...crop.thresholds,
-      // 作物档案中的光照阈值单位是 lux，滑杆使用 klx，这里统一为 klx
-      lightMin: crop.thresholds.lightMin > 30 ? crop.thresholds.lightMin / 1000 : crop.thresholds.lightMin,
+      // 作物档案中的光照阈值单位是 lux，设备上报为 0-100%
+      // 以档案最大需光量 15000 lux 为满量程，换算成百分比（0-100）
+      lightMin: Math.min(100, Math.round((crop.thresholds.lightMin / LIGHT_LUX_FULL_SCALE) * 100)),
       // 补上作物档案里没有的 waterTarget
       waterTarget: WATER_DISTANCE_THRESHOLD,
     })
@@ -231,7 +235,7 @@ export default function GreenhouseDashboard() {
       case 'soil_moisture':
         return value < thresholds.soilMoistureMin ? 'danger' : value < thresholds.soilMoistureMin + 5 ? 'warning' : 'normal'
       case 'light_intensity':
-        return value < thresholds.lightMin ? 'danger' : value < thresholds.lightMin + 1000 ? 'warning' : 'normal'
+        return value < thresholds.lightMin ? 'danger' : value < thresholds.lightMin + 5 ? 'warning' : 'normal'
       default:
         return 'normal'
     }
@@ -247,7 +251,7 @@ export default function GreenhouseDashboard() {
       case 'soil_moisture':
         return 100
       case 'light_intensity':
-        return 30
+        return 100
       case 'water_level':
         return 100
       default:
@@ -275,7 +279,7 @@ export default function GreenhouseDashboard() {
       case 'soil_moisture':
         return '%'
       case 'light_intensity':
-        return ' klx'
+        return '%'
       case 'water_level':
         return ' cm'
       default:
@@ -316,7 +320,7 @@ export default function GreenhouseDashboard() {
       case 'soil_moisture':
         return `Threshold: ${thresholds.soilMoistureMin}%`
       case 'light_intensity':
-        return `Threshold: ${thresholds.lightMin} klx`
+        return `Threshold: ${thresholds.lightMin}%`
       case 'water_level':
         return `Alert: distance > ${thresholds.waterTarget}cm`
       default:
@@ -741,13 +745,13 @@ export default function GreenhouseDashboard() {
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs text-gray-500">Light Min</label>
-                    <span className="text-xs font-medium text-emerald-600">{thresholds.lightMin} klx</span>
+                    <span className="text-xs font-medium text-emerald-600">{thresholds.lightMin}%</span>
                   </div>
                   <input
                     type="range"
                     min="0"
-                    max="30"
-                    step="0.5"
+                    max="100"
+                    step="1"
                     value={thresholds.lightMin}
                     onChange={(e) => updateThreshold('lightMin', Number(e.target.value))}
                     className="w-full h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer accent-emerald-500"
