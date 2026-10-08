@@ -1,6 +1,6 @@
 /**
- * Mock API Service
- * 纯前端 Mock 数据模式 - 无任何网络请求
+ * OneNET API Service
+ * 类型定义、作物阈值档案、物模型标识符映射，以及控制指令下发
  */
 
 // 数据流 ID 定义
@@ -81,3 +81,40 @@ export const VEGETABLE_PROFILES: VegetableProfile[] = [
     description: 'Prefers cool days and warm nights',
   },
 ]
+
+// 执行器 id -> OneNET 物模型可写属性标识符
+export const ACTUATOR_IDENTIFIERS: Record<string, string> = {
+  buzzer: 'buzzer',
+  humidifier: 'humidifier',
+  irrigation: 'irrigation',
+  light: 'light_switch',
+  fan: 'fan',
+}
+
+// 前端阈值字段 -> OneNET 自动模式阈值属性
+export const THRESHOLD_IDENTIFIERS = {
+  airTempMax: 'temp_max',
+  airHumidityMin: 'hum_min',
+  soilMoistureMin: 'soil_min',
+  lightMin: 'light_min',
+  waterTarget: 'water_max',
+} as const
+
+/**
+ * 下发设备属性（支持批量）
+ * 对应 POST /api/control -> OneNET thingmodel/set-device-property
+ */
+export async function sendControl(params: Record<string, boolean | number>): Promise<boolean> {
+  try {
+    const res = await fetch('/api/control', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ params }),
+    })
+    if (!res.ok) return false
+    const json = await res.json().catch(() => null)
+    return json?.success === true
+  } catch {
+    return false
+  }
+}

@@ -14,12 +14,20 @@
 
 const ONENET_API_BASE = 'https://iot-api.heclouds.com'
 
-// OneNET 物模型 identifier -> 前端字段名
+// OneNET 物模型 identifier -> 前端字段名（只读传感器）
 const IDENTIFIER_MAPPING = {
   temp: 'air_temp',
   hum: 'air_humidity',
   light: 'light_intensity',
+  soil_moisture: 'soil_moisture',
+  water_level: 'water_level',
 }
+
+// 可写属性：执行器开关 / 工作模式 / 自动模式阈值，从同一接口读回当前值
+// ⚠️ 必须与 functions/api/control.js 的 WRITABLE_IDENTIFIERS 保持一致
+const SWITCH_IDENTIFIERS = ['light_switch', 'fan', 'humidifier', 'irrigation', 'buzzer']
+const THRESHOLD_IDENTIFIERS = ['temp_max', 'hum_min', 'soil_min', 'light_min', 'water_max']
+const READBACK_IDENTIFIERS = new Set(['work_mode', ...SWITCH_IDENTIFIERS, ...THRESHOLD_IDENTIFIERS])
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
@@ -112,22 +120,38 @@ function normalizeDatapoints(data) {
   return items
 }
 
+// 平台返回的 value 一律是字符串：数值形如 "25.2"，bool 形如 "true"/"false"
+// 统一转成数字（bool → 1/0），转不动返回 null
+function toNumber(value) {
+  if (typeof value === 'boolean') return value ? 1 : 0
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    if (normalized === 'true') return 1
+    if (normalized === 'false') return 0
+    if (normalized === '') return null
+  }
+  const raw = Number(value)
+  return Number.isFinite(raw) ? raw : null
+}
+
 // 按映射关系组装前端需要的数据（不做单位换算）
+// 传感器用映射后的字段名，可写属性直接用 identifier 作为字段名
 function buildSensorData(items) {
   const result = {}
 
   for (const item of items) {
-    const field = IDENTIFIER_MAPPING[item.identifier]
-    if (!field) continue
+    const identifier = item.identifier
+    const field = IDENTIFIER_MAPPING[identifier]
+    const isReadback = READBACK_IDENTIFIERS.has(identifier)
+    if (!field && !isReadback) continue
 
     // 跳过没有 value 字段的属性（设备从未上报）
     if (item.value === undefined || item.value === null || item.value === '') continue
 
-    // value 是字符串，统一转成数字
-    const raw = Number(item.value)
-    if (!Number.isFinite(raw)) continue
+    const value = toNumber(item.value)
+    if (value === null) continue
 
-    result[field] = raw
+    result[field ?? identifier] = value
   }
 
   return result

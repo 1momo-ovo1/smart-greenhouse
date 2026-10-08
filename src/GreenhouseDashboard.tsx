@@ -32,6 +32,9 @@ import {
 } from 'recharts'
 import {
   VEGETABLE_PROFILES,
+  ACTUATOR_IDENTIFIERS,
+  THRESHOLD_IDENTIFIERS,
+  sendControl,
   type SensorData,
   type ActuatorState,
   type ThresholdConfig,
@@ -78,6 +81,8 @@ const API_FIELD_MAP: Record<string, string> = {
   air_temp: 'air_temperature',
   air_humidity: 'air_humidity',
   light_intensity: 'light_intensity',
+  soil_moisture: 'soil_moisture',
+  water_level: 'water_level',
 }
 
 // 生成初始传感器数据（等待首次拉取，值均为 null）
@@ -108,6 +113,14 @@ function generateInitialHistoryData(): { timestamp: number; value: number }[] {
   return data
 }
 
+// 本地时间 HH:MM:SS（日志面板用）
+function nowTime(): string {
+  const d = new Date()
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(
+    d.getSeconds()
+  ).padStart(2, '0')}`
+}
+
 export default function GreenhouseDashboard() {
   const navigate = useNavigate()
   const [crops, setCrops] = useState<Crop[]>(VEGETABLE_PROFILES)
@@ -125,6 +138,10 @@ export default function GreenhouseDashboard() {
   const [autoMode, setAutoMode] = useState(true)
   const [showToast, setShowToast] = useState(false)
   const logPanelRef = useRef<AlertLogPanelRef>(null)
+  // 下发成功后记录时间，轮询在 6 秒内不覆盖该字段，避免乐观更新被旧值闪回
+  const lastWriteRef = useRef<Record<string, number>>({})
+  // 阈值只在首次成功回读，之后以界面为准（保存时下发）
+  const thresholdsLoadedRef = useRef(false)
 
   // 拉取真实传感器数据；失败时保留上次数据，仅记录一条警告日志
   const fetchData = useCallback(async () => {
@@ -148,6 +165,46 @@ export default function GreenhouseDashboard() {
           return { ...sensor, value: values.get(sensor.id) ?? null, timestamp: Date.now() }
         })
       )
+
+      const record = payload as Record<string, unknown>
+      const polledAt = Date.now()
+
+      // 执行器状态回读（自动模式下设备的实际输出也从这里体现）
+      setActuators((prev) =>
+        prev.map((actuator) => {
+          const identifier = ACTUATOR_IDENTIFIERS[actuator.id]
+          if (!identifier || !(identifier in record)) return actuator
+          if (polledAt - (lastWriteRef.current[identifier] ?? 0) < 6000) return actuator
+          const next = Number(record[identifier]) === 1
+          return actuator.status === next ? actuator : { ...actuator, status: next }
+        })
+      )
+
+      // 工作模式回读
+      if ('work_mode' in record && polledAt - (lastWriteRef.current.work_mode ?? 0) >= 6000) {
+        const auto = Number(record.work_mode) === 1
+        setAutoMode((prev) => (prev === auto ? prev : auto))
+      }
+
+      // 阈值只在首次成功回读，避免拖动滑块被 5 秒轮询覆盖
+      if (!thresholdsLoadedRef.current) {
+        const entries = (
+          Object.keys(THRESHOLD_IDENTIFIERS) as Array<keyof typeof THRESHOLD_IDENTIFIERS>
+        )
+          .map((key) => [key, THRESHOLD_IDENTIFIERS[key]] as const)
+          .filter(([, identifier]) => identifier in record)
+        if (entries.length > 0) {
+          thresholdsLoadedRef.current = true
+          setThresholds((prev) => {
+            const next = { ...prev }
+            for (const [key, identifier] of entries) {
+              const raw = Number(record[identifier])
+              if (Number.isFinite(raw)) next[key] = raw
+            }
+            return next
+          })
+        }
+      }
     } catch {
       // 保留上次数据，不清空
       const now = new Date()
@@ -202,12 +259,38 @@ export default function GreenhouseDashboard() {
     })
   }
 
-  // 切换执行器
-  const toggleActuator = (id: string) => {
-    const newStatus = !actuators.find((a) => a.id === id)?.status
-    setActuators((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, status: newStatus } : a))
-    )
+  // 切换执行器：先乐观更新界面，再下发 OneNET，失败回滚并记日志
+  const toggleActuator = async (id: string) => {
+    if (autoMode) return // 自动模式下由设备控制
+    const before = actuators.find((a) => a.id === id)?.status ?? false
+    const next = !before
+    setActuators((list) => list.map((a) => (a.id === id ? { ...a, status: next } : a)))
+
+    const identifier = ACTUATOR_IDENTIFIERS[id]
+    if (!identifier) return
+    lastWriteRef.current[identifier] = Date.now()
+    const ok = await sendControl({ [identifier]: next })
+    if (ok) return
+
+    lastWriteRef.current[identifier] = 0
+    setActuators((list) => list.map((a) => (a.id === id ? { ...a, status: before } : a)))
+    logPanelRef.current?.addLog(nowTime(), 'danger', `下发失败：${identifier}`)
+  }
+
+  // 切换手动 / 自动：写入设备 work_mode，自动逻辑在设备端执行
+  const handleModeChange = (auto: boolean) => {
+    if (auto === autoMode) return
+    setAutoMode(auto)
+    lastWriteRef.current.work_mode = Date.now()
+    void sendControl({ work_mode: auto ? 1 : 0 }).then((ok) => {
+      if (ok) {
+        logPanelRef.current?.addLog(nowTime(), 'info', auto ? '已切换为自动模式' : '已切换为手动模式')
+        return
+      }
+      lastWriteRef.current.work_mode = 0
+      setAutoMode(!auto)
+      logPanelRef.current?.addLog(nowTime(), 'danger', '模式切换失败，请检查 work_mode 属性')
+    })
   }
 
   // 更新阈值
@@ -215,10 +298,20 @@ export default function GreenhouseDashboard() {
     setThresholds((prev) => ({ ...prev, [key]: value }))
   }
 
-  // 保存阈值
-  const handleSaveThresholds = () => {
+  // 保存阈值：下发到设备，自动模式由设备按这些阈值执行
+  const handleSaveThresholds = async () => {
+    const params: Record<string, number> = {}
+    for (const key of Object.keys(THRESHOLD_IDENTIFIERS) as Array<keyof typeof THRESHOLD_IDENTIFIERS>) {
+      params[THRESHOLD_IDENTIFIERS[key]] = thresholds[key]
+    }
+    const ok = await sendControl(params)
+    if (!ok) {
+      logPanelRef.current?.addLog(nowTime(), 'danger', '阈值下发失败，请检查物模型是否已保存')
+      return
+    }
     setShowToast(true)
     setTimeout(() => setShowToast(false), 2000)
+    logPanelRef.current?.addLog(nowTime(), 'info', '阈值已下发到设备')
   }
 
   // 检查传感器是否超出阈值
@@ -236,6 +329,13 @@ export default function GreenhouseDashboard() {
         return value < thresholds.soilMoistureMin ? 'danger' : value < thresholds.soilMoistureMin + 5 ? 'warning' : 'normal'
       case 'light_intensity':
         return value < thresholds.lightMin ? 'danger' : value < thresholds.lightMin + 5 ? 'warning' : 'normal'
+      case 'water_level':
+        // 距离越大水位越低：超过设定距离即视为缺水
+        return value > thresholds.waterTarget
+          ? 'danger'
+          : value > thresholds.waterTarget - 5
+            ? 'warning'
+            : 'normal'
       default:
         return 'normal'
     }
@@ -388,7 +488,7 @@ export default function GreenhouseDashboard() {
             {/* Mode Toggle */}
             <div className="flex items-center gap-1 bg-gray-100 rounded-full p-1">
               <button
-                onClick={() => setAutoMode(false)}
+                onClick={() => handleModeChange(false)}
                 className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all ${
                   !autoMode ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'
                 }`}
@@ -396,7 +496,7 @@ export default function GreenhouseDashboard() {
                 Manual
               </button>
               <button
-                onClick={() => setAutoMode(true)}
+                onClick={() => handleModeChange(true)}
                 className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all ${
                   autoMode ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'
                 }`}
@@ -660,6 +760,13 @@ export default function GreenhouseDashboard() {
               <h2 className="text-xs font-semibold text-gray-800 mb-3 flex items-center gap-2 uppercase tracking-wider">
                 <Power size={14} />
                 Actuators
+                <span
+                  className={`ml-auto normal-case tracking-normal font-medium ${
+                    autoMode ? 'text-emerald-600' : 'text-gray-400'
+                  }`}
+                >
+                  {autoMode ? 'AUTO' : 'MANUAL'}
+                </span>
               </h2>
               <div className="space-y-1.5">
                 {actuators.map((actuator) => (
@@ -675,9 +782,11 @@ export default function GreenhouseDashboard() {
                     </div>
                     <button
                       onClick={() => toggleActuator(actuator.id)}
+                      disabled={autoMode}
+                      title={autoMode ? '自动模式下由设备控制' : '点击下发到设备'}
                       className={`relative w-10 h-5 rounded-full transition-all ${
                         actuator.status ? 'bg-green-500' : 'bg-gray-300'
-                      }`}
+                      } ${autoMode ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       <div
                         className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${

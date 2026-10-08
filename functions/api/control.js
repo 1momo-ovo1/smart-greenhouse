@@ -16,6 +16,37 @@
 
 const ONENET_API_BASE = 'https://iot-api.heclouds.com'
 
+// 可写属性白名单（必须与 functions/api/sensors.js 的回读列表保持一致）
+const BOOL_IDENTIFIERS = new Set(['light_switch', 'fan', 'humidifier', 'irrigation', 'buzzer'])
+const RANGE_IDENTIFIERS = {
+  work_mode: [0, 1], // 0 手动 / 1 自动
+  temp_max: [-40, 85], // 温度上限 °C
+  hum_min: [0, 100], // 湿度下限 %
+  soil_min: [0, 100], // 土壤湿度下限 %
+  light_min: [0, 100], // 光照下限 %
+  water_max: [0, 50], // 水位距离上限 cm（距离越大水位越低）
+}
+const WRITABLE_IDENTIFIERS = new Set([...BOOL_IDENTIFIERS, ...Object.keys(RANGE_IDENTIFIERS)])
+
+// enum 属性：平台对取值格式（数字 / 字符串）在不同版本上不一致，
+// 首次下发失败时会把数字换成字符串自动重试一次
+const ENUM_IDENTIFIERS = ['work_mode']
+
+// 校验并归一化下发值；非法返回 null
+function normalizeValue(identifier, value) {
+  if (BOOL_IDENTIFIERS.has(identifier)) {
+    if (typeof value === 'boolean') return value
+    if (value === 1 || value === '1' || value === 'true') return true
+    if (value === 0 || value === '0' || value === 'false') return false
+    return null
+  }
+  const raw = typeof value === 'string' ? Number(value) : value
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return null
+  const [min, max] = RANGE_IDENTIFIERS[identifier]
+  if (raw < min || raw > max) return null
+  return raw
+}
+
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*',
@@ -96,37 +127,84 @@ export async function onRequestPost(context) {
       return jsonResponse(400, { success: false, error: 'Invalid JSON body' })
     }
 
-    const datastream = payload?.datastream
-    const value = payload?.value
+    // 支持两种请求体：
+    //   { "datastream": "fan", "value": true }            单个属性
+    //   { "params": { "temp_max": 25, "hum_min": 60 } }   批量属性
+    let incoming = payload?.params
+    if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) {
+      const datastream = payload?.datastream
+      if (!datastream || typeof datastream !== 'string') {
+        return jsonResponse(400, {
+          success: false,
+          error: 'Missing "params" or "datastream" in request body',
+        })
+      }
+      incoming = { [datastream]: payload?.value }
+    }
 
-    if (!datastream || typeof datastream !== 'string') {
-      return jsonResponse(400, { success: false, error: 'Missing "datastream" in request body' })
+    // 白名单 + 取值校验，防止任意属性被公网调用改写
+    const params = {}
+    for (const [identifier, value] of Object.entries(incoming)) {
+      if (!WRITABLE_IDENTIFIERS.has(identifier)) {
+        return jsonResponse(400, {
+          success: false,
+          error: `Property "${identifier}" is not writable`,
+        })
+      }
+      const normalized = normalizeValue(identifier, value)
+      if (normalized === null) {
+        const expect = BOOL_IDENTIFIERS.has(identifier)
+          ? 'true / false'
+          : `${RANGE_IDENTIFIERS[identifier][0]} ~ ${RANGE_IDENTIFIERS[identifier][1]}`
+        return jsonResponse(400, {
+          success: false,
+          error: `Invalid value for "${identifier}" (expect ${expect})`,
+        })
+      }
+      params[identifier] = normalized
     }
 
     const authorization = await generateToken(productId, accessKey)
 
-    const response = await fetch(`${ONENET_API_BASE}/thingmodel/set-device-property`, {
-      method: 'POST',
-      headers: {
-        authorization,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        product_id: productId,
-        device_name: deviceName,
-        params: {
-          [datastream]: value,
-        },
-      }),
-    })
+    // enum 属性可能要求数字或字符串两种格式之一：首次失败时换一种再试一次
+    const attempts = [params]
+    if (Object.keys(params).some((id) => ENUM_IDENTIFIERS.includes(id))) {
+      attempts.push(
+        Object.fromEntries(
+          Object.entries(params).map(([id, v]) => [
+            id,
+            ENUM_IDENTIFIERS.includes(id) && typeof v === 'number' ? String(v) : v,
+          ])
+        )
+      )
+    }
 
-    const raw = await response.text()
-
+    let response = null
+    let raw = ''
     let body = null
-    try {
-      body = JSON.parse(raw)
-    } catch {
-      body = null
+    for (let i = 0; i < attempts.length; i++) {
+      response = await fetch(`${ONENET_API_BASE}/thingmodel/set-device-property`, {
+        method: 'POST',
+        headers: {
+          authorization,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          product_id: productId,
+          device_name: deviceName,
+          params: attempts[i],
+        }),
+      })
+
+      raw = await response.text()
+      try {
+        body = JSON.parse(raw)
+      } catch {
+        body = null
+      }
+
+      // 成功，或已经是最后一次尝试：退出
+      if ((response.ok && body?.code === 0) || i === attempts.length - 1) break
     }
 
     // 响应非 200：返回 502 并透传错误信息
